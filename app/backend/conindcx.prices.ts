@@ -1,4 +1,4 @@
-import { coindcx_marketURL, PORT_NO } from './config'
+import { coindcx_marketURL } from './config'
 import axios from 'axios'
 
 
@@ -12,23 +12,18 @@ export async function getPrices(marketId: string) {
     const displayLength = Math.min(100, bidsKeys.length, asksKeys.length);
     const orderBookTable = [];
     let sum = 0;
-   
-    // let profit = hi
 
     for (let i = 0; i < displayLength; i++) {
         orderBookTable.push({
-            "Bid Amount": parseFloat(bidsKeys[i]!),
+            "Coindcx Bid Amount": parseFloat(bidsKeys[i]!),
             "Bid Qty": parseFloat(data.bids[bidsKeys[i]!]),
-            "Ask Amount": parseFloat(asksKeys[i]!),
+            "Coindcx Ask Amount": parseFloat(asksKeys[i]!),
             "Ask Qty": parseFloat(data.asks[asksKeys[i]!]),
             "Profit" : parseFloat(asksKeys[i]!) - parseFloat(bidsKeys[i]!),
-
         });
         sum += orderBookTable[orderBookTable.length - 1]!.Profit;
     }
-
     // Prints a perfectly formatted, clean visual grid layout
     console.table(orderBookTable);
     console.log(`Total Profit: ${sum}`);
 }
-
