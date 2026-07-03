@@ -5,12 +5,12 @@ export function coindcx_marketURL(assetId: string){
 }
 
 export function binance_marketURL(assetId: string){
-    const URL=`https://api.binance.com/api/v3/depth?symbol=${assetId}&limit=4119`;
+    const URL=`https://api.binance.com/api/v3/depth?symbol=${assetId}&limit=50`;
     return URL;
 }
 
 export function bybit_marketURL(assetId: string) {
-  const URL =`https://api.bybit.com/v5/market/orderbook?category=spot&symbol=${assetId}&limit=1000`;
+  const URL =`https://api.bybit.com/v5/market/orderbook?category=spot&symbol=${assetId}&limit=50`;
   return URL;
 }
  
