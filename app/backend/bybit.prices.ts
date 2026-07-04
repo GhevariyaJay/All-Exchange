@@ -33,7 +33,7 @@ export function bybitGetPrices(data: {
       "Bid Qty": bid.qty,
       "Bybit Ask Amount": ask?.price ?? null,
       "Ask Qty": ask?.qty ?? null,
-      "Profit": ask ? Number((ask.price - bid.price).toFixed(2)) : null,
+      "Profit": ask ? Number((ask.price - bid.price).toFixed(7)) : null,
     };
   });
 

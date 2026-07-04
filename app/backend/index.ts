@@ -6,7 +6,6 @@ import { coindcxGetPrices } from "./conindcx.prices";
 import { binanceGetPrices } from "./binance.prices";
 import { fetchBybitOrderbook } from "./bybit.prices";
 
-// NOTE: Interface structure updated slightly to handle standalone depth layers cleanly
 interface DepthLevel {
   price: string;
   total: number;
@@ -22,88 +21,77 @@ interface StructuredOrderBook {
 
 const app = express();
 
-app.use(cors({ origin: "http://localhost:3000", credentials: true })); // Explicit frontend rule
+app.use(cors()); 
 app.use(express.json());
 
-export const assetId = "B-ETH_USDT";
-export const bAssetId = "ETHUSDT";
+// Helper function to translate frontend format (e.g. "BTC/USDT") to exact Exchange conventions
+function convertPairSymbols(rawPair: string) {
+  const structuralBase = rawPair.replace("/", "-").toUpperCase(); // e.g. "BTC-USDT"
+  const dynamicTicker = structuralBase.replace("-", "");          // e.g. "BTCUSDT"
 
-interface ExchangeData {
-  bids: Map<string, number>;
-  asks: Map<string, number>;
+  return {
+    coinDcxId: `B-${structuralBase.replace("-", "_")}`,           // Matches "B-BTC_USDT" format
+    standardId: dynamicTicker                                      // Matches "BTCUSDT" format
+  };
 }
 
-const binanceBook: ExchangeData = { bids: new Map(), asks: new Map() };
-const bybitBook: ExchangeData = { bids: new Map(), asks: new Map() };
-const coinDcxBook: ExchangeData = { bids: new Map(), asks: new Map() };
+// Fixed Aggregation Engine that cleanly maps matrix array layers via direct indexing
+function generateAggregatedDepth(binanceData: any, bybitData: any, coinDcxData: any): StructuredOrderBook {
+  const localBinanceBids = new Map<string, number>();
+  const localBinanceAsks = new Map<string, number>();
+  const localBybitBids = new Map<string, number>();
+  const localBybitAsks = new Map<string, number>();
+  const localCoinDcxBids = new Map<string, number>();
+  const localCoinDcxAsks = new Map<string, number>();
 
-// The state payload now natively splits Bids and Asks
-let aggregatedOrderBook: StructuredOrderBook = { bids: [], asks: [] };
-
-// SSE clients
-const clients = new Set<Response>();
-
-function broadcastOrderBook() {
-  const payload = `data: ${JSON.stringify(aggregatedOrderBook)}\n\n`;
-  for (const client of clients) {
-    client.write(payload);
+  // ✅ FIXED: Parsing Binance [price, quantity] arrays
+  if (binanceData?.bids || binanceData?.asks) {
+    binanceData.bids?.forEach((entry: any) => { 
+      if (Array.isArray(entry) && entry.length >= 2) localBinanceBids.set(String(entry[0]), parseFloat(entry[1])); 
+    });
+    binanceData.asks?.forEach((entry: any) => { 
+      if (Array.isArray(entry) && entry.length >= 2) localBinanceAsks.set(String(entry[0]), parseFloat(entry[1])); 
+    });
   }
-}
 
-function aggregateOrderBooks(): void {
+  // ✅ FIXED: Parsing Bybit [price, quantity] arrays 
+  if (bybitData?.result) {
+    bybitData.result.b?.forEach((entry: any) => { 
+      if (Array.isArray(entry) && entry.length >= 2) localBybitBids.set(String(entry[0]), parseFloat(entry[1])); 
+    });
+    bybitData.result.a?.forEach((entry: any) => { 
+      if (Array.isArray(entry) && entry.length >= 2) localBybitAsks.set(String(entry[0]), parseFloat(entry[1])); 
+    });
+  }
+
+  // Parse CoinDCX structures
+  if (coinDcxData) {
+    if (coinDcxData.bids && typeof coinDcxData.bids === 'object' && !Array.isArray(coinDcxData.bids)) {
+      Object.entries(coinDcxData.bids).forEach(([price, qty]) => { localCoinDcxBids.set(price, parseFloat(String(qty))); });
+    }
+    if (coinDcxData.asks && typeof coinDcxData.asks === 'object' && !Array.isArray(coinDcxData.asks)) {
+      Object.entries(coinDcxData.asks).forEach(([price, qty]) => { localCoinDcxAsks.set(price, parseFloat(String(qty))); });
+    }
+  }
+
   const aggregatedBids: Record<string, { binance: number; bybit: number; coinDcx: number }> = {};
   const aggregatedAsks: Record<string, { binance: number; bybit: number; coinDcx: number }> = {};
-  
   const uniqueBidPrices = new Set<string>();
   const uniqueAskPrices = new Set<string>();
 
-  // --- PROCESS BIDS ---
-  binanceBook.bids.forEach((val, p) => {
-    const price = parseFloat(p).toFixed(2);
-    uniqueBidPrices.add(price);
-    if (!aggregatedBids[price]) aggregatedBids[price] = { binance: 0, bybit: 0, coinDcx: 0 };
-    aggregatedBids[price].binance += val;
-  });
-  bybitBook.bids.forEach((val, p) => {
-    const price = parseFloat(p).toFixed(2);
-    uniqueBidPrices.add(price);
-    if (!aggregatedBids[price]) aggregatedBids[price] = { binance: 0, bybit: 0, coinDcx: 0 };
-    aggregatedBids[price].bybit += val;
-  });
-  coinDcxBook.bids.forEach((val, p) => {
-    const price = parseFloat(p).toFixed(2);
-    uniqueBidPrices.add(price);
-    if (!aggregatedBids[price]) aggregatedBids[price] = { binance: 0, bybit: 0, coinDcx: 0 };
-    aggregatedBids[price].coinDcx += val;
-  });
+  // --- Aggregate Bids ---
+  localBinanceBids.forEach((val, p) => { const price = parseFloat(p).toFixed(2); uniqueBidPrices.add(price); if (!aggregatedBids[price]) aggregatedBids[price] = { binance: 0, bybit: 0, coinDcx: 0 }; aggregatedBids[price].binance += val; });
+  localBybitBids.forEach((val, p) => { const price = parseFloat(p).toFixed(2); uniqueBidPrices.add(price); if (!aggregatedBids[price]) aggregatedBids[price] = { binance: 0, bybit: 0, coinDcx: 0 }; aggregatedBids[price].bybit += val; });
+  localCoinDcxBids.forEach((val, p) => { const price = parseFloat(p).toFixed(2); uniqueBidPrices.add(price); if (!aggregatedBids[price]) aggregatedBids[price] = { binance: 0, bybit: 0, coinDcx: 0 }; aggregatedBids[price].coinDcx += val; });
 
-  // --- PROCESS ASKS ---
-  binanceBook.asks.forEach((val, p) => {
-    const price = parseFloat(p).toFixed(2);
-    uniqueAskPrices.add(price);
-    if (!aggregatedAsks[price]) aggregatedAsks[price] = { binance: 0, bybit: 0, coinDcx: 0 };
-    aggregatedAsks[price].binance += val;
-  });
-  bybitBook.asks.forEach((val, p) => {
-    const price = parseFloat(p).toFixed(2);
-    uniqueAskPrices.add(price);
-    if (!aggregatedAsks[price]) aggregatedAsks[price] = { binance: 0, bybit: 0, coinDcx: 0 };
-    aggregatedAsks[price].bybit += val;
-  });
-  coinDcxBook.asks.forEach((val, p) => {
-    const price = parseFloat(p).toFixed(2);
-    uniqueAskPrices.add(price);
-    if (!aggregatedAsks[price]) aggregatedAsks[price] = { binance: 0, bybit: 0, coinDcx: 0 };
-    aggregatedAsks[price].coinDcx += val;
-  });
+  // --- Aggregate Asks ---
+  localBinanceAsks.forEach((val, p) => { const price = parseFloat(p).toFixed(2); uniqueAskPrices.add(price); if (!aggregatedAsks[price]) aggregatedAsks[price] = { binance: 0, bybit: 0, coinDcx: 0 }; aggregatedAsks[price].binance += val; });
+  localBybitAsks.forEach((val, p) => { const price = parseFloat(p).toFixed(2); uniqueAskPrices.add(price); if (!aggregatedAsks[price]) aggregatedAsks[price] = { binance: 0, bybit: 0, coinDcx: 0 }; aggregatedAsks[price].bybit += val; });
+  localCoinDcxAsks.forEach((val, p) => { const price = parseFloat(p).toFixed(2); uniqueAskPrices.add(price); if (!aggregatedAsks[price]) aggregatedAsks[price] = { binance: 0, bybit: 0, coinDcx: 0 }; aggregatedAsks[price].coinDcx += val; });
 
-  // CRITICAL FIX: Sort Bids Descending (Highest buy order first)
   const sortedBidPrices = Array.from(uniqueBidPrices).sort((a, b) => parseFloat(b) - parseFloat(a));
-  
-  // CRITICAL FIX: Sort Asks Ascending (Lowest sell order first)
   const sortedAskPrices = Array.from(uniqueAskPrices).sort((a, b) => parseFloat(a) - parseFloat(b));
 
-  // Map out distinct depth matrices
   const bidRows: DepthLevel[] = sortedBidPrices.slice(0, 25).map((priceStr) => {
     const data: any = aggregatedBids[priceStr];
     return {
@@ -126,109 +114,31 @@ function aggregateOrderBooks(): void {
     };
   });
 
-  // Assign clean layout split state
-  aggregatedOrderBook = {
-    bids: bidRows,
-    asks: askRows,
-  };
-
-  broadcastOrderBook();
+  return { bids: bidRows, asks: askRows };
 }
 
-app.get("/api/orderbook", (_req: Request, res: Response) => {
-  res.json(aggregatedOrderBook);
-});
-
-app.get("/api/orderbook/stream", (req: Request, res: Response) => {
-  res.setHeader("Content-Type", "text/event-stream");
-  res.setHeader("Cache-Control", "no-cache");
-  res.setHeader("Connection", "keep-alive");
-  res.flushHeaders();
-
-  clients.add(res);
-  res.write(`data: ${JSON.stringify(aggregatedOrderBook)}\n\n`);
-
-  req.on("close", () => {
-    clients.delete(res);
-  });
-});
-
-async function updateCoinDcx() {
+// Accept dynamic query string parameters
+app.get("/api/orderbook", async (req: Request, res: Response) => {
   try {
-    const data = await coindcxGetPrices(assetId) as any;
-    if (data) {
-      coinDcxBook.bids.clear();
-      coinDcxBook.asks.clear();
-      if (data.bids && typeof data.bids === 'object' && !Array.isArray(data.bids)) {
-        Object.entries(data.bids).forEach(([price, qty]) => {
-          coinDcxBook.bids.set(price, parseFloat(String(qty)));
-        });
-      }
-      if (data.asks && typeof data.asks === 'object' && !Array.isArray(data.asks)) {
-        Object.entries(data.asks).forEach(([price, qty]) => {
-          coinDcxBook.asks.set(price, parseFloat(String(qty)));
-        });
-      }
-      aggregateOrderBooks();
-    }
+    const rawPairQuery = (req.query.pair as string) || "SOL-USDT";
+    const symbols = convertPairSymbols(rawPairQuery);
+
+    // Simultaneously pull live network statistics 
+    const [binanceData, bybitData, coinDcxData] = await Promise.all([
+      binanceGetPrices(symbols.standardId).catch(() => null),
+      fetchBybitOrderbook(symbols.standardId).catch(() => null),
+      coindcxGetPrices(symbols.coinDcxId).catch(() => null),
+    ]);
+
+    const resultPayload = generateAggregatedDepth(binanceData, bybitData, coinDcxData);
+    res.json(resultPayload);
+
   } catch (error) {
-    console.error("CoinDCX error:", error);
+    console.error("Orderbook extraction routing error:", error);
+    res.status(500).json({ error: "Failed to generate dynamic data matrices." });
   }
-}
-
-async function updateBinance() {
-  try {
-    const data = await binanceGetPrices(bAssetId) as any;
-    if (data?.bids || data?.asks) {
-      binanceBook.bids.clear();
-      binanceBook.asks.clear();
-      data.bids?.forEach((entry: any) => {
-        if (Array.isArray(entry) && entry.length >= 2) {
-          binanceBook.bids.set(String(entry[0]), parseFloat(entry[1]));
-        }
-      });
-      data.asks?.forEach((entry: any) => {
-        if (Array.isArray(entry) && entry.length >= 2) {
-          binanceBook.asks.set(String(entry[0]), parseFloat(entry[1]));
-        }
-      });
-      aggregateOrderBooks();
-    }
-  } catch (e) {
-    console.error("Binance error:", e);
-  }
-}
-
-async function updateBybit() {
-  try {
-    const rawData = await fetchBybitOrderbook(bAssetId) as any;
-    if (rawData?.result) {
-      bybitBook.bids.clear();
-      bybitBook.asks.clear();
-      rawData.result.b?.forEach((entry: any) => {
-        if (Array.isArray(entry) && entry.length >= 2) {
-          bybitBook.bids.set(String(entry[0]), parseFloat(entry[1]));
-        }
-      });
-      rawData.result.a?.forEach((entry: any) => {
-        if (Array.isArray(entry) && entry.length >= 2) {
-          bybitBook.asks.set(String(entry[0]), parseFloat(entry[1]));
-        }
-      });
-      aggregateOrderBooks();
-    }
-  } catch (e) {
-    console.error("Bybit error:", e);
-  }
-}
+});
 
 app.listen(PORT_NO, () => {
-  console.log(`Server is running on port ${PORT_NO}`);
-  updateCoinDcx();
-  updateBinance();
-  updateBybit();
-
-  setInterval(updateCoinDcx, 6000);
-  setInterval(updateBinance, 4000);
-  setInterval(updateBybit, 2000);
+  console.log(`Dynamic multi-venue depth aggregation matrix server online on port ${PORT_NO}`);
 });

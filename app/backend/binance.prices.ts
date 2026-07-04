@@ -29,6 +29,7 @@ export async function binanceGetPrices(marketId: string) {
     // });
     // console.log("Binance orderbook:");
     // console.table(rows);
+    // console.log("Binance orderbook data:", data);
    return data;
   
   }
