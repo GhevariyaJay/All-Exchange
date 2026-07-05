@@ -13,5 +13,10 @@ export function bybit_marketURL(assetId: string) {
   const URL =`https://api.bybit.com/v5/market/orderbook?category=spot&symbol=${assetId}&limit=50`;
   return URL;
 }
+
+export function binance_fundingRateURL(assetId: string){
+    const URL = `https://fapi.binance.com/fapi/v1/fundingRate?symbol=${assetId}&limit=1`;
+    return URL;
+}
  
 export const PORT_NO=3000;

@@ -2,6 +2,7 @@ import { coindcx_marketURL } from './config'
 import axios from 'axios'
 
 
+
 export async function coindcxGetPrices(marketId: string) {
     const res = await axios.get(coindcx_marketURL(marketId));
     const data = res.data;
@@ -29,3 +30,6 @@ export async function coindcxGetPrices(marketId: string) {
     // console.log(`Total Profit: ${sum}`);
    return data;
 }
+
+
+

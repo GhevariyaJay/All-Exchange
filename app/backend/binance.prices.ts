@@ -1,4 +1,4 @@
-import { binance_marketURL } from './config';
+import { binance_fundingRateURL, binance_marketURL } from './config';
 import axios from 'axios';
 
 export async function binanceGetPrices(marketId: string) {
@@ -29,8 +29,18 @@ export async function binanceGetPrices(marketId: string) {
     // });
     // console.log("Binance orderbook:");
     // console.table(rows);
-    // console.log("Binance orderbook data:", data);
+    // // console.log("Binance orderbook data:", data);
    return data;
   
   }
+
+export async function binanceFundingRates(marketId: string) {
+   
+    const res = await axios.get(binance_fundingRateURL(marketId));
+    const data = res.data; // This is the array shown in your terminal
+    // console.log("Binance funding rates data:", data);
+    return data;
+    
+}
+
   

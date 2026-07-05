@@ -1,3 +1,5 @@
+import { binanceFundingRates } from "./binance.prices";
+
 // Interface.ts
 export interface Orderbooklevel {
     price: number;
@@ -47,3 +49,28 @@ export const localBybitBids = new Map<string, number>();
 export const localBybitAsks = new Map<string, number>();
 export const localCoinDcxBids = new Map<string, number>();
 export const localCoinDcxAsks = new Map<string, number>();
+
+export async function fundingRate(marketId: string) {
+  let res = await binanceFundingRates(marketId);
+
+  if (Array.isArray(res)) {
+    if (res.length === 0) {
+      console.error(`No funding rate records found for pair: ${marketId}`);
+      return 0;
+    }
+    res = res[res.length - 1]; // Grabs the latest item
+  }
+
+  const rateStr = res?.fundingRate || res?.lastFundingRate || res?.rate;
+
+  if (!rateStr) {
+    console.error("Funding rate value missing inside targeted entry item:", res);
+    return 0;
+  }
+
+  const fundingPercentage = parseFloat(rateStr) * 100;
+  console.log(`Funding rate for ${marketId}: ${fundingPercentage}%`);
+  return fundingPercentage;
+}
+
+  

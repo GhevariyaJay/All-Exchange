@@ -1,7 +1,8 @@
 import express from "express";
-import type { Request, Response } from "express";
+// import type { Request, Response } from "express";
 import cors from "cors";
 import { PORT_NO } from "./config";
+import { binanceFundingRates } from "./binance.prices";
 import { coindcxGetPrices } from "./conindcx.prices";
 import { binanceGetPrices } from "./binance.prices";
 import { fetchBybitOrderbook } from "./bybit.prices";
@@ -118,6 +119,8 @@ function generateAggregatedDepth(binanceData: any, bybitData: any, coinDcxData: 
 }
 
 // Accept dynamic query string parameters
+
+  
 app.get("/api/orderbook", async (req: Request, res: Response) => {
   try {
     const rawPairQuery = (req.query.pair as string) || "SOL-USDT";
@@ -139,6 +142,12 @@ app.get("/api/orderbook", async (req: Request, res: Response) => {
   }
 });
 
+
+
 app.listen(PORT_NO, () => {
   console.log(`Dynamic multi-venue depth aggregation matrix server online on port ${PORT_NO}`);
+  setInterval(() => {
+    const res = binanceFundingRates("SOLUSDT");
+
+  }, 1000);
 });
