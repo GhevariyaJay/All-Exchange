@@ -1,3 +1,4 @@
+import { cachedDataVersionTag } from 'v8';
 import { coindcx_marketURL } from './config'
 import axios from 'axios'
 
@@ -7,7 +8,7 @@ export async function coindcxGetPrices(marketId: string) {
     const res = await axios.get(coindcx_marketURL(marketId));
     const data = res.data;
     
-
+    // if User want to print orderbook data in console, uncomment below code
     // const bidsKeys = Object.keys(data?.bids || {}).sort((a, b) => parseFloat(b) - parseFloat(a));
     // const asksKeys = Object.keys(data?.asks || {}).sort((a, b) => parseFloat(a) - parseFloat(b));
 
@@ -27,7 +28,7 @@ export async function coindcxGetPrices(marketId: string) {
     // }
     // // Prints a perfectly formatted, clean visual grid layout
     // console.table(orderBookTable);
-    // console.log(`Total Profit: ${sum}`);
+    // console.log("Coindcx orderbook data:", data);
    return data;
 }
 
