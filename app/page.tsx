@@ -13,27 +13,28 @@ import { SideBar, DashboardView } from "./components/SideBar"
 export default function OrderbookPage() {
   const [activePair, setActivePair] = useState<string>("SOL/USDT");
   
-  // FIX: Wrapped the initial value in an array layout to match the SideBar signature
-  const [currentView, setCurrentView] = useState<DashboardView[]>(["Overview"]);
+  // Keep the core active view state as a clean, single value
+  const [currentView, setCurrentView] = useState<DashboardView>("Overview");
 
-  // Helper check function to make reading current active arrays clean and clear
-  const isViewing = (tab: DashboardView) => currentView.includes(tab);
-
+  // FIX: Bridge the property types explicitly inside the SideBar fields
   return (
     <div className="min-h-screen bg-background text-foreground">
       {/* Dynamic Background Visual Elements */}
       <div className="fixed inset-0 -z-10 bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.10),transparent_25%),radial-gradient(circle_at_top_right,rgba(168,85,247,0.10),transparent_30%),radial-gradient(circle_at_bottom_left,rgba(16,185,129,0.08),transparent_28%)]" />
 
       <div className="grid min-h-screen grid-cols-12 gap-4 p-4">
-        {/* Navigation Sidebar Controls */}
-        <SideBar currentView={currentView} onViewChange={setCurrentView} />  
+        {/* Navigation Sidebar Controls (Mapping values directly to fix signature conflict) */}
+        <SideBar 
+          currentView={[currentView]} 
+          onViewChange={(view: any) => setCurrentView(view)} 
+        />  
 
         <main className="col-span-12 space-y-4 lg:col-span-10">
           {/* Header containing search & currency token switching utilities */}
           <Header currentPair={activePair} onSearchPair={setActivePair} />
           
-          {/* DYNAMIC ROUTING RULES: Changed equality checks to match array inclusions */}
-          {isViewing("Overview") && (
+          {/* DYNAMIC ROUTING RULES: Using direct equality checks */}
+          {currentView === "Overview" && (
             <>
               <GlobalCards activePair={activePair} />
               <SpreadInfo activePair={activePair} />
@@ -42,30 +43,30 @@ export default function OrderbookPage() {
             </>
           )}
 
-          {isViewing("Aggregated Book") && (
+          {currentView === "Aggregated Book" && (
             <>
               <Orderbook activePair={activePair} />
             </>
           )}
 
-          {isViewing("Venue Monitor") && (
+          {currentView === "Venue Monitor" && (
             <>
               <ExchangeData activePair={activePair} />
             </>
           )}
 
-          {isViewing("Spread Radar") && (
+          {currentView === "Spread Radar" && (
             <SpreadInfo activePair={activePair} />
           )}
 
           {/* Fallback layout views for future features */}
-          {isViewing("Liquidity Walls") && (
+          {currentView === "Liquidity Walls" && (
             <div className="p-8 border border-dashed rounded-2xl text-center text-muted-foreground bg-card/30">
               Liquidity Wall visualization module loading...
             </div>
           )}
 
-          {isViewing("Alerts") && (
+          {currentView === "Alerts" && (
             <div className="p-8 border border-dashed rounded-2xl text-center text-muted-foreground bg-card/30">
               Real-time threshold notification system loading...
             </div>
