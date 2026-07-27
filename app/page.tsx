@@ -13,8 +13,11 @@ import { SideBar, DashboardView } from "./components/SideBar"
 export default function OrderbookPage() {
   const [activePair, setActivePair] = useState<string>("SOL/USDT");
   
-  // Centralized view state router
-  const [currentView, setCurrentView] = useState<DashboardView>("Overview");
+  // FIX: Wrapped the initial value in an array layout to match the SideBar signature
+  const [currentView, setCurrentView] = useState<DashboardView[]>(["Overview"]);
+
+  // Helper check function to make reading current active arrays clean and clear
+  const isViewing = (tab: DashboardView) => currentView.includes(tab);
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -29,8 +32,8 @@ export default function OrderbookPage() {
           {/* Header containing search & currency token switching utilities */}
           <Header currentPair={activePair} onSearchPair={setActivePair} />
           
-          {/* DYNAMIC ROUTING RULES: Render panels according to active tab selections */}
-          {currentView === "Overview" && (
+          {/* DYNAMIC ROUTING RULES: Changed equality checks to match array inclusions */}
+          {isViewing("Overview") && (
             <>
               <GlobalCards activePair={activePair} />
               <SpreadInfo activePair={activePair} />
@@ -39,30 +42,30 @@ export default function OrderbookPage() {
             </>
           )}
 
-          {currentView === "Aggregated Book" && (
+          {isViewing("Aggregated Book") && (
             <>
               <Orderbook activePair={activePair} />
             </>
           )}
 
-          {currentView === "Venue Monitor" && (
+          {isViewing("Venue Monitor") && (
             <>
               <ExchangeData activePair={activePair} />
             </>
           )}
 
-          {currentView === "Spread Radar" && (
+          {isViewing("Spread Radar") && (
             <SpreadInfo activePair={activePair} />
           )}
 
           {/* Fallback layout views for future features */}
-          {currentView === "Liquidity Walls" && (
+          {isViewing("Liquidity Walls") && (
             <div className="p-8 border border-dashed rounded-2xl text-center text-muted-foreground bg-card/30">
               Liquidity Wall visualization module loading...
             </div>
           )}
 
-          {currentView === "Alerts" && (
+          {isViewing("Alerts") && (
             <div className="p-8 border border-dashed rounded-2xl text-center text-muted-foreground bg-card/30">
               Real-time threshold notification system loading...
             </div>
