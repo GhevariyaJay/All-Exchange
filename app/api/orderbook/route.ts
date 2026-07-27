@@ -1,11 +1,8 @@
-import express from "express";
-// import type { Request, Response } from "express";
-import cors from "cors";
-import { PORT_NO } from "./config";
-import { binanceFundingRates } from "./binance.prices";
-import { coindcxGetPrices } from "./conindcx.prices";
-import { binanceGetPrices } from "./binance.prices";
-import { fetchBybitOrderbook } from "./bybit.prices";
+import { NextResponse } from "next/server";
+// Adjust these relative paths if your price files are in a different folder
+import { binanceGetPrices } from "../../backend/binance.prices";
+import { coindcxGetPrices } from "../../backend/conindcx.prices";
+import { fetchBybitOrderbook } from "../../backend/bybit.prices";
 
 interface DepthLevel {
   price: string;
@@ -20,23 +17,15 @@ interface StructuredOrderBook {
   asks: DepthLevel[];
 }
 
-const app = express();
-
-app.use(cors()); 
-app.use(express.json());
-
-// Helper function to translate frontend format (e.g. "BTC/USDT") to exact Exchange conventions
 function convertPairSymbols(rawPair: string) {
-  const structuralBase = rawPair.replace("/", "-").toUpperCase(); // e.g. "BTC-USDT"
-  const dynamicTicker = structuralBase.replace("-", "");          // e.g. "BTCUSDT"
-
+  const structuralBase = rawPair.replace("/", "-").toUpperCase();
+  const dynamicTicker = structuralBase.replace("-", "");
   return {
-    coinDcxId: `B-${structuralBase.replace("-", "_")}`,           // Matches "B-BTC_USDT" format
-    standardId: dynamicTicker                                      // Matches "BTCUSDT" format
+    coinDcxId: `B-${structuralBase.replace("-", "_")}`,
+    standardId: dynamicTicker
   };
 }
 
-// Fixed Aggregation Engine that cleanly maps matrix array layers via direct indexing
 function generateAggregatedDepth(binanceData: any, bybitData: any, coinDcxData: any): StructuredOrderBook {
   const localBinanceBids = new Map<string, number>();
   const localBinanceAsks = new Map<string, number>();
@@ -45,7 +34,6 @@ function generateAggregatedDepth(binanceData: any, bybitData: any, coinDcxData: 
   const localCoinDcxBids = new Map<string, number>();
   const localCoinDcxAsks = new Map<string, number>();
 
-  // ✅ FIXED: Parsing Binance [price, quantity] arrays
   if (binanceData?.bids || binanceData?.asks) {
     binanceData.bids?.forEach((entry: any) => { 
       if (Array.isArray(entry) && entry.length >= 2) localBinanceBids.set(String(entry[0]), parseFloat(entry[1])); 
@@ -55,7 +43,6 @@ function generateAggregatedDepth(binanceData: any, bybitData: any, coinDcxData: 
     });
   }
 
-  // ✅ FIXED: Parsing Bybit [price, quantity] arrays 
   if (bybitData?.result) {
     bybitData.result.b?.forEach((entry: any) => { 
       if (Array.isArray(entry) && entry.length >= 2) localBybitBids.set(String(entry[0]), parseFloat(entry[1])); 
@@ -65,7 +52,6 @@ function generateAggregatedDepth(binanceData: any, bybitData: any, coinDcxData: 
     });
   }
 
-  // Parse CoinDCX structures
   if (coinDcxData) {
     if (coinDcxData.bids && typeof coinDcxData.bids === 'object' && !Array.isArray(coinDcxData.bids)) {
       Object.entries(coinDcxData.bids).forEach(([price, qty]) => { localCoinDcxBids.set(price, parseFloat(String(qty))); });
@@ -80,12 +66,10 @@ function generateAggregatedDepth(binanceData: any, bybitData: any, coinDcxData: 
   const uniqueBidPrices = new Set<string>();
   const uniqueAskPrices = new Set<string>();
 
-  // --- Aggregate Bids ---
   localBinanceBids.forEach((val, p) => { const price = parseFloat(p).toFixed(2); uniqueBidPrices.add(price); if (!aggregatedBids[price]) aggregatedBids[price] = { binance: 0, bybit: 0, coinDcx: 0 }; aggregatedBids[price].binance += val; });
   localBybitBids.forEach((val, p) => { const price = parseFloat(p).toFixed(2); uniqueBidPrices.add(price); if (!aggregatedBids[price]) aggregatedBids[price] = { binance: 0, bybit: 0, coinDcx: 0 }; aggregatedBids[price].bybit += val; });
   localCoinDcxBids.forEach((val, p) => { const price = parseFloat(p).toFixed(2); uniqueBidPrices.add(price); if (!aggregatedBids[price]) aggregatedBids[price] = { binance: 0, bybit: 0, coinDcx: 0 }; aggregatedBids[price].coinDcx += val; });
 
-  // --- Aggregate Asks ---
   localBinanceAsks.forEach((val, p) => { const price = parseFloat(p).toFixed(2); uniqueAskPrices.add(price); if (!aggregatedAsks[price]) aggregatedAsks[price] = { binance: 0, bybit: 0, coinDcx: 0 }; aggregatedAsks[price].binance += val; });
   localBybitAsks.forEach((val, p) => { const price = parseFloat(p).toFixed(2); uniqueAskPrices.add(price); if (!aggregatedAsks[price]) aggregatedAsks[price] = { binance: 0, bybit: 0, coinDcx: 0 }; aggregatedAsks[price].bybit += val; });
   localCoinDcxAsks.forEach((val, p) => { const price = parseFloat(p).toFixed(2); uniqueAskPrices.add(price); if (!aggregatedAsks[price]) aggregatedAsks[price] = { binance: 0, bybit: 0, coinDcx: 0 }; aggregatedAsks[price].coinDcx += val; });
@@ -95,38 +79,24 @@ function generateAggregatedDepth(binanceData: any, bybitData: any, coinDcxData: 
 
   const bidRows: DepthLevel[] = sortedBidPrices.slice(0, 25).map((priceStr) => {
     const data: any = aggregatedBids[priceStr];
-    return {
-      price: priceStr,
-      total: +(data.binance + data.bybit + data.coinDcx).toFixed(4),
-      binance: +data.binance.toFixed(4),
-      bybit: +data.bybit.toFixed(4),
-      coinDcx: +data.coinDcx.toFixed(4),
-    };
+    return { price: priceStr, total: +(data.binance + data.bybit + data.coinDcx).toFixed(4), binance: +data.binance.toFixed(4), bybit: +data.bybit.toFixed(4), coinDcx: +data.coinDcx.toFixed(4) };
   });
 
   const askRows: DepthLevel[] = sortedAskPrices.slice(0, 25).map((priceStr) => {
     const data: any = aggregatedAsks[priceStr];
-    return {
-      price: priceStr,
-      total: +(data.binance + data.bybit + data.coinDcx).toFixed(4),
-      binance: +data.binance.toFixed(4),
-      bybit: +data.bybit.toFixed(4),
-      coinDcx: +data.coinDcx.toFixed(4),
-    };
+    return { price: priceStr, total: +(data.binance + data.bybit + data.coinDcx).toFixed(4), binance: +data.binance.toFixed(4), bybit: +data.bybit.toFixed(4), coinDcx: +data.coinDcx.toFixed(4) };
   });
 
   return { bids: bidRows, asks: askRows };
 }
 
-// Accept dynamic query string parameters
-
-  
-app.get("/api/orderbook", async (req: Request, res: Response) => {
+// This GET function replaces your Express app.get("/api/orderbook")
+export async function GET(request: Request) {
   try {
-    const rawPairQuery = (req.query.pair as string) || "SOL-USDT";
+    const { searchParams } = new URL(request.url);
+    const rawPairQuery = searchParams.get("pair") || "SOL-USDT";
     const symbols = convertPairSymbols(rawPairQuery);
 
-    // Simultaneously pull live network statistics 
     const [binanceData, bybitData, coinDcxData] = await Promise.all([
       binanceGetPrices(symbols.standardId).catch(() => null),
       fetchBybitOrderbook(symbols.standardId).catch(() => null),
@@ -134,20 +104,9 @@ app.get("/api/orderbook", async (req: Request, res: Response) => {
     ]);
 
     const resultPayload = generateAggregatedDepth(binanceData, bybitData, coinDcxData);
-    res.json(resultPayload);
-
+    return NextResponse.json(resultPayload);
   } catch (error) {
     console.error("Orderbook extraction routing error:", error);
-    res.status(500).json({ error: "Failed to generate dynamic data matrices." });
+    return NextResponse.json({ error: "Failed to generate dynamic data matrices." }, { status: 500 });
   }
-});
-
-
-
-app.listen(PORT_NO, () => {
-  console.log(`Dynamic multi-venue depth aggregation matrix server online on port ${PORT_NO}`);
-  setInterval(() => {
-    const res = binanceFundingRates("SOLUSDT");
-
-  }, 1000);
-});
+}
